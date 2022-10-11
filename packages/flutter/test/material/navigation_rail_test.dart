@@ -55,6 +55,19 @@ void main() {
     expect(actualUnselectedIconTheme.fontSize, equals(unselectedIconTheme.size));
   });
 
+  testWidgets('No selected destination when selectedIndex is null', (WidgetTester tester) async {
+    await _pumpNavigationRail(
+      tester,
+      navigationRail: NavigationRail(
+        selectedIndex: null,
+        destinations: _destinations(),
+      ),
+    );
+
+    final Iterable<Semantics> semantics = tester.widgetList<Semantics>(find.byType(Semantics));
+    expect(semantics.where((Semantics s) => s.properties.selected ?? false), isEmpty);
+  });
+
   testWidgets('backgroundColor can be changed', (WidgetTester tester) async {
     await _pumpNavigationRail(
       tester,
@@ -1130,7 +1143,7 @@ void main() {
     );
 
     // Since the rail is icon only, its preferred width should not be affected
-    // by  textScaleFactor.
+    // by textScaleFactor.
     final RenderBox renderBox = tester.renderObject(find.byType(NavigationRail));
     expect(renderBox.size.width, compactWidth);
 
@@ -1208,7 +1221,7 @@ void main() {
     );
 
     // Since the rail is icon only, its preferred width should not be affected
-    // by  textScaleFactor.
+    // by textScaleFactor.
     final RenderBox renderBox = tester.renderObject(find.byType(NavigationRail));
     expect(renderBox.size.width, compactWidth);
 
@@ -2031,6 +2044,9 @@ void main() {
 
     await tester.tap(find.text('Ghi'));
     expect(selectedIndex, 2);
+
+    // Wait for any pending shader compilation.
+    tester.pumpAndSettle();
   });
 
   testWidgets('onDestinationSelected is not called if null', (WidgetTester tester) async {
@@ -2046,6 +2062,9 @@ void main() {
 
     await tester.tap(find.text('Def'));
     expect(selectedIndex, 0);
+
+    // Wait for any pending shader compilation.
+    tester.pumpAndSettle();
   });
 
   testWidgets('Changing destinations animate when [labelType]=selected', (WidgetTester tester) async {
@@ -2111,6 +2130,116 @@ void main() {
     expect(_labelOpacity(tester, 'Ghi'), equals(0.5));
     await tester.pumpAndSettle();
     expect(_labelOpacity(tester, 'Ghi'), equals(1.0));
+  });
+
+  testWidgets('Changing destinations animate for selectedIndex=null', (WidgetTester tester) async {
+    int? selectedIndex = 0;
+    late StateSetter stateSetter;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            stateSetter = setState;
+            return Scaffold(
+              body: Row(
+                children: <Widget>[
+                  NavigationRail(
+                    destinations: _destinations(),
+                    selectedIndex: selectedIndex,
+                    labelType: NavigationRailLabelType.selected,
+                  ),
+                  const Expanded(
+                    child: Text('body'),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    // Unset the selected index.
+    stateSetter(() {
+      selectedIndex = null;
+    });
+
+    // The first destination animates out.
+    expect(_labelOpacity(tester, 'Abc'), equals(1.0));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 25));
+    expect(_labelOpacity(tester, 'Abc'), equals(0.5));
+    await tester.pumpAndSettle();
+    expect(_labelOpacity(tester, 'Abc'), equals(0.0));
+
+    // Set the selected index to the first destination.
+    stateSetter(() {
+      selectedIndex = 0;
+    });
+
+    // The first destination animates in.
+    expect(_labelOpacity(tester, 'Abc'), equals(0.0));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(_labelOpacity(tester, 'Abc'), equals(0.5));
+    await tester.pumpAndSettle();
+    expect(_labelOpacity(tester, 'Abc'), equals(1.0));
+  });
+
+  testWidgets('Changing destinations animate when selectedIndex=null during transition', (WidgetTester tester) async {
+    int? selectedIndex = 0;
+    late StateSetter stateSetter;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            stateSetter = setState;
+            return Scaffold(
+              body: Row(
+                children: <Widget>[
+                  NavigationRail(
+                    destinations: _destinations(),
+                    selectedIndex: selectedIndex,
+                    labelType: NavigationRailLabelType.selected,
+                  ),
+                  const Expanded(
+                    child: Text('body'),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    stateSetter(() {
+      selectedIndex = 1;
+    });
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 175));
+
+    // Interrupt while animating from index 0 to 1.
+    stateSetter(() {
+      selectedIndex = null;
+    });
+
+    expect(_labelOpacity(tester, 'Abc'), equals(0));
+    expect(_labelOpacity(tester, 'Def'), equals(1));
+
+    await tester.pump();
+    // Create very close to 0, but non-zero, animation value.
+    await tester.pump(const Duration(milliseconds: 1));
+    // Ensure the opacity is animated back towards 0.
+    expect(_labelOpacity(tester, 'Def'), lessThan(0.5));
+    expect(_labelOpacity(tester, 'Def'), closeTo(0.5, 0.03));
+
+    await tester.pumpAndSettle();
+    expect(_labelOpacity(tester, 'Abc'), equals(0.0));
+    expect(_labelOpacity(tester, 'Def'), equals(0.0));
   });
 
   testWidgets('Semantics - labelType=[none]', (WidgetTester tester) async {
@@ -2185,9 +2314,15 @@ void main() {
       ),
     );
 
-    final Padding firstItem = tester.widget<Padding>(find.widgetWithText(Padding, 'Abc'));
-    final Padding secondItem = tester.widget<Padding>(find.widgetWithText(Padding, 'Def'));
-    final Padding thirdItem = tester.widget<Padding>(find.widgetWithText(Padding, 'Ghi'));
+    final Padding firstItem = tester.widget<Padding>(
+      find.descendant(of: find.widgetWithText(InkResponse, 'Abc'), matching: find.widgetWithText(Padding, 'Abc'))
+    );
+    final Padding secondItem = tester.widget<Padding>(
+      find.descendant(of: find.widgetWithText(InkResponse, 'Def'), matching: find.widgetWithText(Padding, 'Def'))
+    );
+    final Padding thirdItem = tester.widget<Padding>(
+        find.descendant(of: find.widgetWithText(InkResponse, 'Ghi'), matching: find.widgetWithText(Padding, 'Ghi'))
+    );
 
     expect(firstItem.padding, defaultPadding);
     expect(secondItem.padding, secondItemPadding);
@@ -2226,9 +2361,15 @@ void main() {
       ),
     );
 
-    final Padding firstItem = tester.widget<Padding>(find.widgetWithText(Padding, 'Abc'));
-    final Padding secondItem = tester.widget<Padding>(find.widgetWithText(Padding, 'Def'));
-    final Padding thirdItem = tester.widget<Padding>(find.widgetWithText(Padding, 'Ghi'));
+    final Padding firstItem = tester.widget<Padding>(
+        find.descendant(of: find.widgetWithText(InkResponse, 'Abc'), matching: find.widgetWithText(Padding, 'Abc'))
+    );
+    final Padding secondItem = tester.widget<Padding>(
+        find.descendant(of: find.widgetWithText(InkResponse, 'Def'), matching: find.widgetWithText(Padding, 'Def'))
+    );
+    final Padding thirdItem = tester.widget<Padding>(
+        find.descendant(of: find.widgetWithText(InkResponse, 'Ghi'), matching: find.widgetWithText(Padding, 'Ghi'))
+    );
 
     expect(firstItem.padding, defaultPadding);
     expect(secondItem.padding, secondItemPadding);
@@ -2267,9 +2408,15 @@ void main() {
       ),
     );
 
-    final Padding firstItem = tester.widget<Padding>(find.widgetWithText(Padding, 'Abc'));
-    final Padding secondItem = tester.widget<Padding>(find.widgetWithText(Padding, 'Def'));
-    final Padding thirdItem = tester.widget<Padding>(find.widgetWithText(Padding, 'Ghi'));
+    final Padding firstItem = tester.widget<Padding>(
+        find.descendant(of: find.widgetWithText(InkResponse, 'Abc'), matching: find.widgetWithText(Padding, 'Abc'))
+    );
+    final Padding secondItem = tester.widget<Padding>(
+        find.descendant(of: find.widgetWithText(InkResponse, 'Def'), matching: find.widgetWithText(Padding, 'Def'))
+    );
+    final Padding thirdItem = tester.widget<Padding>(
+        find.descendant(of: find.widgetWithText(InkResponse, 'Ghi'), matching: find.widgetWithText(Padding, 'Ghi'))
+    );
 
     expect(firstItem.padding, defaultPadding);
     expect(secondItem.padding, secondItemPadding);
@@ -2506,6 +2653,59 @@ void main() {
     // Indicator without Stack widget
     final RenderBox lastIndicator = tester.renderObject(find.byType(Icon).last);
     expect(lastIndicator.localToGlobal(Offset.zero).dx, 28.0);
+  });
+
+  testWidgets('NavigationRail respects the notch/system navigation bar in landscape mode', (WidgetTester tester) async {
+    const double safeAreaPadding = 40.0;
+    NavigationRail navigationRail() {
+      return NavigationRail(
+        selectedIndex: 0,
+        destinations: const <NavigationRailDestination>[
+          NavigationRailDestination(
+            icon: Icon(Icons.favorite_border),
+            selectedIcon: Icon(Icons.favorite),
+            label: Text('Abc'),
+          ),
+          NavigationRailDestination(
+            icon: Icon(Icons.bookmark_border),
+            selectedIcon: Icon(Icons.bookmark),
+            label: Text('Def'),
+          ),
+        ],
+      );
+    }
+
+    await tester.pumpWidget(_buildWidget(navigationRail()));
+    final double defaultWidth = tester.getSize(find.byType(NavigationRail)).width;
+    expect(defaultWidth, 80);
+
+    await tester.pumpWidget(
+      _buildWidget(
+        MediaQuery(
+          data: const MediaQueryData(
+            padding: EdgeInsets.only(left: safeAreaPadding),
+          ),
+          child: navigationRail(),
+        ),
+      ),
+    );
+    final double updatedWidth = tester.getSize(find.byType(NavigationRail)).width;
+    expect(updatedWidth, defaultWidth + safeAreaPadding);
+
+    // test width when text direction is RTL.
+    await tester.pumpWidget(
+      _buildWidget(
+        MediaQuery(
+          data: const MediaQueryData(
+            padding: EdgeInsets.only(right: safeAreaPadding),
+          ),
+          child: navigationRail(),
+        ),
+        isRTL: true,
+      ),
+    );
+    final double updatedWidthRTL = tester.getSize(find.byType(NavigationRail)).width;
+    expect(updatedWidthRTL, defaultWidth + safeAreaPadding);
   });
 
   group('Material 2', () {
@@ -3403,7 +3603,7 @@ void main() {
       );
 
       // Since the rail is icon only, its preferred width should not be affected
-      // by  textScaleFactor.
+      // by textScaleFactor.
       final RenderBox renderBox = tester.renderObject(find.byType(NavigationRail));
       expect(renderBox.size.width, 56.0);
 
@@ -3474,7 +3674,7 @@ void main() {
       );
 
       // Since the rail is icon only, its preferred width should not be affected
-      // by  textScaleFactor.
+      // by textScaleFactor.
       final RenderBox renderBox = tester.renderObject(find.byType(NavigationRail));
       expect(renderBox.size.width, 56.0);
 
@@ -4263,6 +4463,61 @@ void main() {
       expect(lastIndicator.localToGlobal(Offset.zero).dx, 24.0);
     });
 
+    testWidgets('NavigationRail respects the notch/system navigation bar in landscape mode', (WidgetTester tester) async {
+      const double safeAreaPadding = 40.0;
+      NavigationRail navigationRail() {
+        return NavigationRail(
+          selectedIndex: 0,
+          destinations: const <NavigationRailDestination>[
+            NavigationRailDestination(
+              icon: Icon(Icons.favorite_border),
+              selectedIcon: Icon(Icons.favorite),
+              label: Text('Abc'),
+            ),
+            NavigationRailDestination(
+              icon: Icon(Icons.bookmark_border),
+              selectedIcon: Icon(Icons.bookmark),
+              label: Text('Def'),
+            ),
+          ],
+        );
+      }
+
+      await tester.pumpWidget(_buildWidget(navigationRail(), useMaterial3: false));
+      final double defaultWidth = tester.getSize(find.byType(NavigationRail)).width;
+      expect(defaultWidth, 72);
+
+      await tester.pumpWidget(
+        _buildWidget(
+            MediaQuery(
+              data: const MediaQueryData(
+                padding: EdgeInsets.only(left: safeAreaPadding),
+              ),
+              child: navigationRail(),
+            ),
+            useMaterial3: false
+        ),
+      );
+      final double updatedWidth = tester.getSize(find.byType(NavigationRail)).width;
+      expect(updatedWidth, defaultWidth + safeAreaPadding);
+
+      // test width when text direction is RTL.
+      await tester.pumpWidget(
+        _buildWidget(
+          MediaQuery(
+            data: const MediaQueryData(
+              padding: EdgeInsets.only(right: safeAreaPadding),
+            ),
+            child: navigationRail(),
+          ),
+          useMaterial3: false,
+          isRTL: true,
+        ),
+      );
+      final double updatedWidthRTL = tester.getSize(find.byType(NavigationRail)).width;
+      expect(updatedWidthRTL, defaultWidth + safeAreaPadding);
+    });
+
   }); // End Material 2 group
 }
 
@@ -4438,14 +4693,15 @@ Finder _opacityAboveLabel(String text) {
 
 // Only valid when labelType != all.
 double? _labelOpacity(WidgetTester tester, String text) {
-  // We search for both Opacity and FadeTransition since in some
+  // We search for both Visibility and FadeTransition since in some
   // cases opacity is animated, in other it's not.
-  final Iterable<Opacity> opacityWidgets = tester.widgetList<Opacity>(find.ancestor(
+  final Iterable<Visibility> visibilityWidgets = tester.widgetList<Visibility>(find.ancestor(
     of: find.text(text),
-    matching: find.byType(Opacity),
+    matching: find.byType(Visibility),
   ));
-  if (opacityWidgets.isNotEmpty)
-    return opacityWidgets.single.opacity;
+  if (visibilityWidgets.isNotEmpty) {
+    return visibilityWidgets.single.visible ? 1.0 : 0.0;
+  }
 
   final FadeTransition fadeTransitionWidget = tester.widget<FadeTransition>(
     find.ancestor(
@@ -4462,6 +4718,25 @@ Material _railMaterial(WidgetTester tester) {
     find.descendant(
       of: find.byType(NavigationRail),
       matching: find.byType(Material),
+    ),
+  );
+}
+
+Widget _buildWidget(Widget child, {bool useMaterial3 = true, bool isRTL = false}) {
+  return MaterialApp(
+    theme: ThemeData(useMaterial3: useMaterial3),
+    home: Directionality(
+      textDirection: isRTL ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+        body: Row(
+          children: <Widget>[
+            child,
+            const Expanded(
+              child: Text('body'),
+            ),
+          ],
+        ),
+      ),
     ),
   );
 }

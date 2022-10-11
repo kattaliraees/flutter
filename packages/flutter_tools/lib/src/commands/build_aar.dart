@@ -112,7 +112,7 @@ class BuildAarCommand extends BuildSubCommand {
     final Iterable<AndroidArch> targetArchitectures =
         stringsArg('target-platform').map<AndroidArch>(getAndroidArchForName);
 
-    final String? buildNumberArg = stringArg('build-number');
+    final String? buildNumberArg = stringArgDeprecated('build-number');
     final String buildNumber = argParser.options.containsKey('build-number')
       && buildNumberArg != null
       && buildNumberArg.isNotEmpty
@@ -121,7 +121,7 @@ class BuildAarCommand extends BuildSubCommand {
 
     final File targetFile = globals.fs.file(globals.fs.path.join('lib', 'main.dart'));
     for (final String buildMode in const <String>['debug', 'profile', 'release']) {
-      if (boolArg(buildMode)) {
+      if (boolArgDeprecated(buildMode)) {
         androidBuildInfo.add(
           AndroidBuildInfo(
             await getBuildInfo(
@@ -142,7 +142,7 @@ class BuildAarCommand extends BuildSubCommand {
       project: _getProject(),
       target: targetFile.path,
       androidBuildInfo: androidBuildInfo,
-      outputDirectoryPath: stringArg('output-dir'),
+      outputDirectoryPath: stringArgDeprecated('output-dir'),
       buildNumber: buildNumber,
     );
     return FlutterCommandResult.success();
@@ -155,6 +155,21 @@ class BuildAarCommand extends BuildSubCommand {
     if (remainingArguments.isEmpty) {
       return FlutterProject.current();
     }
-    return FlutterProject.fromDirectory(globals.fs.directory(findProjectRoot(globals.fs, remainingArguments.first)));
+    final File mainFile = globals.fs.file(remainingArguments.first);
+    final String path;
+    if (!mainFile.existsSync()) {
+      final Directory pathProject = globals.fs.directory(remainingArguments.first);
+      if (!pathProject.existsSync()) {
+        throwToolExit('${remainingArguments.first} does not exist');
+      }
+      path = pathProject.path;
+    } else {
+      path = mainFile.parent.path;
+    }
+    final String? projectRoot = findProjectRoot(globals.fs, path);
+    if (projectRoot == null) {
+      throwToolExit('${mainFile.parent.path} is not a valid flutter project');
+    }
+    return FlutterProject.fromDirectory(globals.fs.directory(projectRoot));
   }
 }

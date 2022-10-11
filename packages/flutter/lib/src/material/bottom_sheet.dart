@@ -35,9 +35,9 @@ typedef BottomSheetDragEndHandler = void Function(
   required bool isClosing,
 });
 
-/// A material design bottom sheet.
+/// A Material Design bottom sheet.
 ///
-/// There are two kinds of bottom sheets in material design:
+/// There are two kinds of bottom sheets in Material Design:
 ///
 ///  * _Persistent_. A persistent bottom sheet shows information that
 ///    supplements the primary content of the app. A persistent bottom sheet
@@ -61,6 +61,8 @@ typedef BottomSheetDragEndHandler = void Function(
 ///    non-modal "persistent" bottom sheets.
 ///  * [showModalBottomSheet], which can be used to display a modal bottom
 ///    sheet.
+///  * [BottomSheetThemeData], which can be used to customize the default
+///    bottom sheet property values.
 ///  * <https://material.io/design/components/sheets-bottom.html>
 class BottomSheet extends StatefulWidget {
   /// Creates a bottom sheet.
@@ -69,7 +71,7 @@ class BottomSheet extends StatefulWidget {
   /// [ScaffoldState.showBottomSheet], for persistent bottom sheets, or by
   /// [showModalBottomSheet], for modal bottom sheets.
   const BottomSheet({
-    Key? key,
+    super.key,
     this.animationController,
     this.enableDrag = true,
     this.onDragStart,
@@ -84,8 +86,7 @@ class BottomSheet extends StatefulWidget {
   }) : assert(enableDrag != null),
        assert(onClosing != null),
        assert(builder != null),
-       assert(elevation == null || elevation >= 0.0),
-       super(key: key);
+       assert(elevation == null || elevation >= 0.0);
 
   /// The animation controller that controls the bottom sheet's entrance and
   /// exit animations.
@@ -220,8 +221,9 @@ class _BottomSheetState extends State<BottomSheet> {
       "'BottomSheet.animationController' can not be null when 'BottomSheet.enableDrag' is true. "
       "Use 'BottomSheet.createAnimationController' to create one, or provide another AnimationController.",
     );
-    if (_dismissUnderway)
+    if (_dismissUnderway) {
       return;
+    }
     widget.animationController!.value -= details.primaryDelta! / _childHeight;
   }
 
@@ -231,8 +233,9 @@ class _BottomSheetState extends State<BottomSheet> {
       "'BottomSheet.animationController' can not be null when 'BottomSheet.enableDrag' is true. "
       "Use 'BottomSheet.createAnimationController' to create one, or provide another AnimationController.",
     );
-    if (_dismissUnderway)
+    if (_dismissUnderway) {
       return;
+    }
     bool isClosing = false;
     if (details.velocity.pixelsPerSecond.dy > _minFlingVelocity) {
       final double flingVelocity = -details.velocity.pixelsPerSecond.dy / _childHeight;
@@ -243,8 +246,9 @@ class _BottomSheetState extends State<BottomSheet> {
         isClosing = true;
       }
     } else if (widget.animationController!.value < _closeProgressThreshold) {
-      if (widget.animationController!.value > 0.0)
+      if (widget.animationController!.value > 0.0) {
         widget.animationController!.fling(velocity: -1.0);
+      }
       isClosing = true;
     } else {
       widget.animationController!.forward();
@@ -270,16 +274,19 @@ class _BottomSheetState extends State<BottomSheet> {
   @override
   Widget build(BuildContext context) {
     final BottomSheetThemeData bottomSheetTheme = Theme.of(context).bottomSheetTheme;
+    final BottomSheetThemeData defaults = Theme.of(context).useMaterial3 ? _BottomSheetDefaultsM3(context) : const BottomSheetThemeData();
     final BoxConstraints? constraints = widget.constraints ?? bottomSheetTheme.constraints;
-    final Color? color = widget.backgroundColor ?? bottomSheetTheme.backgroundColor;
-    final double elevation = widget.elevation ?? bottomSheetTheme.elevation ?? 0;
-    final ShapeBorder? shape = widget.shape ?? bottomSheetTheme.shape;
+    final Color? color = widget.backgroundColor ?? bottomSheetTheme.backgroundColor ?? defaults.backgroundColor;
+    final Color? surfaceTintColor = bottomSheetTheme.surfaceTintColor ?? defaults.surfaceTintColor;
+    final double elevation = widget.elevation ?? bottomSheetTheme.elevation ?? defaults.elevation ?? 0;
+    final ShapeBorder? shape = widget.shape ?? bottomSheetTheme.shape ?? defaults.shape;
     final Clip clipBehavior = widget.clipBehavior ?? bottomSheetTheme.clipBehavior ?? Clip.none;
 
     Widget bottomSheet = Material(
       key: _childKey,
       color: color,
       elevation: elevation,
+      surfaceTintColor: surfaceTintColor,
       shape: shape,
       clipBehavior: clipBehavior,
       child: NotificationListener<DraggableScrollableNotification>(
@@ -345,7 +352,7 @@ class _ModalBottomSheetLayout extends SingleChildLayoutDelegate {
 
 class _ModalBottomSheet<T> extends StatefulWidget {
   const _ModalBottomSheet({
-    Key? key,
+    super.key,
     this.route,
     this.backgroundColor,
     this.elevation,
@@ -355,8 +362,7 @@ class _ModalBottomSheet<T> extends StatefulWidget {
     this.isScrollControlled = false,
     this.enableDrag = true,
   }) : assert(isScrollControlled != null),
-       assert(enableDrag != null),
-       super(key: key);
+       assert(enableDrag != null);
 
   final _ModalBottomSheetRoute<T>? route;
   final bool isScrollControlled;
@@ -464,13 +470,13 @@ class _ModalBottomSheetRoute<T> extends PopupRoute<T> {
     this.isDismissible = true,
     this.enableDrag = true,
     required this.isScrollControlled,
-    RouteSettings? settings,
+    super.settings,
     this.transitionAnimationController,
     this.anchorPoint,
+    this.useSafeArea = false,
   }) : assert(isScrollControlled != null),
        assert(isDismissible != null),
-       assert(enableDrag != null),
-       super(settings: settings);
+       assert(enableDrag != null);
 
   final WidgetBuilder? builder;
   final CapturedThemes capturedThemes;
@@ -485,6 +491,7 @@ class _ModalBottomSheetRoute<T> extends PopupRoute<T> {
   final bool enableDrag;
   final AnimationController? transitionAnimationController;
   final Offset? anchorPoint;
+  final bool useSafeArea;
 
   @override
   Duration get transitionDuration => _bottomSheetEnterDuration;
@@ -517,30 +524,37 @@ class _ModalBottomSheetRoute<T> extends PopupRoute<T> {
 
   @override
   Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
-    // By definition, the bottom sheet is aligned to the bottom of the page
-    // and isn't exposed to the top padding of the MediaQuery.
-    final Widget bottomSheet = MediaQuery.removePadding(
-      context: context,
-      removeTop: true,
-      child: DisplayFeatureSubScreen(
-        anchorPoint: anchorPoint,
-        child: Builder(
-          builder: (BuildContext context) {
-            final BottomSheetThemeData sheetTheme = Theme.of(context).bottomSheetTheme;
-            return _ModalBottomSheet<T>(
-              route: this,
-              backgroundColor: backgroundColor ?? sheetTheme.modalBackgroundColor ?? sheetTheme.backgroundColor,
-              elevation: elevation ?? sheetTheme.modalElevation ?? sheetTheme.elevation,
-              shape: shape,
-              clipBehavior: clipBehavior,
-              constraints: constraints,
-              isScrollControlled: isScrollControlled,
-              enableDrag: enableDrag,
-            );
-          },
-        ),
+    final Widget content = DisplayFeatureSubScreen(
+      anchorPoint: anchorPoint,
+      child: Builder(
+        builder: (BuildContext context) {
+          final BottomSheetThemeData sheetTheme = Theme.of(context).bottomSheetTheme;
+          final BottomSheetThemeData defaults = Theme.of(context).useMaterial3 ? _BottomSheetDefaultsM3(context) : const BottomSheetThemeData();
+          return _ModalBottomSheet<T>(
+            route: this,
+            backgroundColor: backgroundColor ?? sheetTheme.modalBackgroundColor ?? sheetTheme.backgroundColor ?? defaults.backgroundColor,
+            elevation: elevation ?? sheetTheme.modalElevation ?? defaults.modalElevation ?? sheetTheme.elevation,
+            shape: shape,
+            clipBehavior: clipBehavior,
+            constraints: constraints,
+            isScrollControlled: isScrollControlled,
+            enableDrag: enableDrag,
+          );
+        },
       ),
     );
+
+    // If useSafeArea is true, a SafeArea is inserted.
+    // If useSafeArea is false, the bottom sheet is aligned to the bottom of the page
+    // and isn't exposed to the top padding of the MediaQuery.
+    final Widget bottomSheet = useSafeArea
+      ? SafeArea(child: content)
+      : MediaQuery.removePadding(
+          context: context,
+          removeTop: true,
+          child: content,
+        );
+
     return capturedThemes.wrap(bottomSheet);
   }
 }
@@ -603,7 +617,7 @@ class _BottomSheetSuspendedCurve extends ParametricCurve<double> {
   }
 }
 
-/// Shows a modal material design bottom sheet.
+/// Shows a modal Material Design bottom sheet.
 ///
 /// A modal bottom sheet is an alternative to a menu or a dialog and prevents
 /// the user from interacting with the rest of the app.
@@ -636,6 +650,9 @@ class _BottomSheetSuspendedCurve extends ParametricCurve<double> {
 /// The [enableDrag] parameter specifies whether the bottom sheet can be
 /// dragged up and down and dismissed by swiping downwards.
 ///
+/// The [useSafeArea] parameter specifies whether a SafeArea is inserted. Defaults to false.
+/// If false, no SafeArea is added and the top padding is consumed using MediaQuery.removePadding.
+///
 /// The optional [backgroundColor], [elevation], [shape], [clipBehavior],
 /// [constraints] and [transitionAnimationController]
 /// parameters can be passed in to customize the appearance and behavior of
@@ -656,7 +673,7 @@ class _BottomSheetSuspendedCurve extends ParametricCurve<double> {
 /// [Navigator.pop] when the modal bottom sheet was closed.
 ///
 /// {@tool dartpad}
-/// This example demonstrates how to use `showModalBottomSheet` to display a
+/// This example demonstrates how to use [showModalBottomSheet] to display a
 /// bottom sheet that obscures the content behind it when a user taps a button.
 /// It also demonstrates how to close the bottom sheet using the [Navigator]
 /// when a user taps on a button inside the bottom sheet.
@@ -688,6 +705,7 @@ Future<T?> showModalBottomSheet<T>({
   bool useRootNavigator = false,
   bool isDismissible = true,
   bool enableDrag = true,
+  bool useSafeArea = false,
   RouteSettings? routeSettings,
   AnimationController? transitionAnimationController,
   Offset? anchorPoint,
@@ -713,15 +731,16 @@ Future<T?> showModalBottomSheet<T>({
     clipBehavior: clipBehavior,
     constraints: constraints,
     isDismissible: isDismissible,
-    modalBarrierColor: barrierColor,
+    modalBarrierColor: barrierColor ?? Theme.of(context).bottomSheetTheme.modalBarrierColor,
     enableDrag: enableDrag,
     settings: routeSettings,
     transitionAnimationController: transitionAnimationController,
     anchorPoint: anchorPoint,
+    useSafeArea: useSafeArea,
   ));
 }
 
-/// Shows a material design bottom sheet in the nearest [Scaffold] ancestor. If
+/// Shows a Material Design bottom sheet in the nearest [Scaffold] ancestor. If
 /// you wish to show a persistent bottom sheet, use [Scaffold.bottomSheet].
 ///
 /// Returns a controller that can be used to close and otherwise manipulate the
@@ -791,3 +810,34 @@ PersistentBottomSheetController<T> showBottomSheet<T>({
     transitionAnimationController: transitionAnimationController,
   );
 }
+
+
+
+// BEGIN GENERATED TOKEN PROPERTIES - BottomSheet
+
+// Do not edit by hand. The code between the "BEGIN GENERATED" and
+// "END GENERATED" comments are generated from data in the Material
+// Design token database by the script:
+//   dev/tools/gen_defaults/bin/gen_defaults.dart.
+
+// Token database version: v0_132
+
+// Generated version v0_132
+class _BottomSheetDefaultsM3 extends BottomSheetThemeData {
+   const _BottomSheetDefaultsM3(this.context)
+    : super(
+      elevation: 1.0,
+      modalElevation: 1.0,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28.0))),
+    );
+
+  final BuildContext context;
+
+  @override
+  Color? get backgroundColor => Theme.of(context).colorScheme.surface;
+
+  @override
+  Color? get surfaceTintColor => Theme.of(context).colorScheme.surfaceTint;
+}
+
+// END GENERATED TOKEN PROPERTIES - BottomSheet

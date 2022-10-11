@@ -3,4 +3,4 @@
 // found in the LICENSE file.
 
 /// The pinned version of flutter gallery, used for devicelab tests.
-const String galleryVersion = '0e7835661dad4af7d745d4751fd1958a66fc03e1';
+const String galleryVersion = '9fd4ee5cb2d280f4ddb497e17acf404cb78c96f6';

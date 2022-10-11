@@ -5,34 +5,61 @@
 import 'template.dart';
 
 class DialogTemplate extends TokenTemplate {
-  const DialogTemplate(String fileName, Map<String, dynamic> tokens) : super(fileName, tokens);
+  const DialogTemplate(super.blockName, super.fileName, super.tokens, {
+    super.colorSchemePrefix = '_colors.',
+    super.textThemePrefix = '_textTheme.'
+  });
 
   @override
   String generate() => '''
-// Generated version ${tokens["version"]}
-class _TokenDefaultsM3 extends DialogTheme {
-  _TokenDefaultsM3(this.context)
-    : _colors = Theme.of(context).colorScheme,
-      _textTheme = Theme.of(context).textTheme,
-      super(
+class _${blockName}DefaultsM3 extends DialogTheme {
+  _${blockName}DefaultsM3(this.context)
+    : super(
         alignment: Alignment.center,
         elevation: ${elevation("md.comp.dialog.container")},
         shape: ${shape("md.comp.dialog.container")},
       );
 
   final BuildContext context;
-  final ColorScheme _colors;
-  final TextTheme _textTheme;
-
-  // TODO(darrenaustin): overlay should be handled by Material widget: https://github.com/flutter/flutter/issues/9160
-  @override
-  Color? get backgroundColor => ElevationOverlay.colorWithOverlay(_colors.${color("md.comp.dialog.container")}, _colors.primary, ${elevation("md.comp.dialog.container")});
+  late final ColorScheme _colors = Theme.of(context).colorScheme;
+  late final TextTheme _textTheme = Theme.of(context).textTheme;
 
   @override
-  TextStyle? get titleTextStyle => _textTheme.${textStyle("md.comp.dialog.subhead")};
+  Color? get iconColor => _colors.secondary;
 
   @override
-  TextStyle? get contentTextStyle => _textTheme.${textStyle("md.comp.dialog.supporting-text")};
+  Color? get backgroundColor => ${componentColor("md.comp.dialog.container")};
+
+  @override
+  Color? get shadowColor => ${colorOrTransparent("md.comp.dialog.container.shadow-color")};
+
+  @override
+  Color? get surfaceTintColor => ${colorOrTransparent("md.comp.dialog.container.surface-tint-layer.color")};
+
+  @override
+  TextStyle? get titleTextStyle => ${textStyle("md.comp.dialog.headline")};
+
+  @override
+  TextStyle? get contentTextStyle => ${textStyle("md.comp.dialog.supporting-text")};
+
+  @override
+  EdgeInsetsGeometry? get actionsPadding => const EdgeInsets.only(left: 24.0, right: 24.0, bottom: 24.0);
+}
+''';
+}
+
+class DialogFullscreenTemplate extends TokenTemplate {
+  const DialogFullscreenTemplate(super.blockName, super.fileName, super.tokens);
+
+  @override
+  String generate() => '''
+class _${blockName}DefaultsM3 extends DialogTheme {
+  const _${blockName}DefaultsM3(this.context);
+
+  final BuildContext context;
+
+  @override
+  Color? get backgroundColor => ${componentColor("md.comp.full-screen-dialog.container")};
 }
 ''';
 }
